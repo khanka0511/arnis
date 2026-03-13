@@ -172,6 +172,13 @@ fn generate_highways_internal(
             let is_indoor = element.tags().get("indoor").is_some_and(|v| v == "yes");
             let is_bridge = !is_indoor && element.tags().get("bridge").is_some_and(|v| v != "no");
 
+            // Create bridge config for material-aware railings
+            let bridge_config = if is_bridge {
+                Some(bridges::BridgeConfig::from_tags(element.tags()))
+            } else {
+                None
+            };
+
             // Parse the layer value for elevation calculation
             let mut layer_value = element
                 .tags()
@@ -374,6 +381,10 @@ fn generate_highways_internal(
                     let dash_length: i32 = (5.0 * scale_factor).ceil() as i32;
                     let gap_length: i32 = (5.0 * scale_factor).ceil() as i32;
 
+                    // Collect per-point elevation for bridge railings
+                    let mut point_elevations: Vec<i32> =
+                        Vec::with_capacity(bresenham_points.len());
+
                     for (point_index, (x, _, z)) in bresenham_points.iter().enumerate() {
                         // Calculate Y elevation for this point
                         // For valley bridges: use fixed deck height (max of endpoints) to stay level
@@ -397,6 +408,9 @@ fn generate_highways_internal(
                             );
                             (y, false)
                         };
+
+                        // Track elevation for bridge railings
+                        point_elevations.push(current_y);
 
                         // Draw the road surface for the entire width
                         for dx in -block_range..=block_range {
@@ -657,29 +671,18 @@ fn generate_highways_internal(
                             (1.0, 0.0)
                         };
 
-                        // Use the deck Y from the first point of this segment for railings
-                        let railing_y = if is_valley_bridge {
-                            bridge_deck_y
-                        } else {
-                            // For overpasses, use the midpoint elevation
-                            let mid = calculate_point_elevation(
-                                segment_index,
-                                segment_length / 2,
-                                segment_length,
-                                total_segments,
-                                effective_elevation,
-                                effective_start_slope,
-                                effective_end_slope,
-                                slope_length,
-                            );
-                            editor.get_absolute_y(x1, mid, z1)
-                        };
+                        let railing_block = bridge_config
+                            .as_ref()
+                            .map(|c| c.railing_block)
+                            .unwrap_or(COBBLESTONE_WALL);
 
                         bridges::add_highway_bridge_railings(
                             editor,
                             &bresenham_points,
-                            railing_y,
+                            &point_elevations,
+                            is_valley_bridge, // valley = absolute Y, overpass = relative Y
                             block_range,
+                            railing_block,
                             dir_x,
                             dir_z,
                         );

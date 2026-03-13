@@ -40,6 +40,16 @@ pub fn generate_railways(editor: &mut WorldEditor, element: &ProcessedWay) {
             let prev_node = element.nodes[i - 1].xz();
             let cur_node = element.nodes[i].xz();
 
+            // Compute segment direction for bridge railings
+            let seg_dx = (cur_node.x - prev_node.x) as f64;
+            let seg_dz = (cur_node.z - prev_node.z) as f64;
+            let seg_len = (seg_dx * seg_dx + seg_dz * seg_dz).sqrt();
+            let (dir_x, dir_z) = if seg_len > 0.0 {
+                (seg_dx / seg_len, seg_dz / seg_len)
+            } else {
+                (1.0, 0.0)
+            };
+
             let points = bresenham_line(prev_node.x, 0, prev_node.z, cur_node.x, 0, cur_node.z);
             let smoothed_points = smooth_diagonal_rails(&points);
 
@@ -69,7 +79,14 @@ pub fn generate_railways(editor: &mut WorldEditor, element: &ProcessedWay) {
                     editor.set_block_absolute(rail_block, bx, deck_y + 1, bz, None, None);
 
                     // Foundation layer
-                    editor.set_block_absolute(config.support_block, bx, deck_y - 1, bz, None, None);
+                    editor.set_block_absolute(
+                        config.support_block,
+                        bx,
+                        deck_y - 1,
+                        bz,
+                        None,
+                        None,
+                    );
 
                     // Support pillars at interval
                     if block_counter % config.support_interval == 0 {
@@ -79,6 +96,13 @@ pub fn generate_railways(editor: &mut WorldEditor, element: &ProcessedWay) {
                     // Ties on the bridge deck
                     if bx % 4 == 0 {
                         editor.set_block_absolute(OAK_LOG, bx, deck_y, bz, None, None);
+                    }
+
+                    // Bridge railings
+                    if config.has_railings {
+                        bridges::add_railway_bridge_railings(
+                            editor, bx, bz, deck_y, config, dir_x, dir_z,
+                        );
                     }
                 } else {
                     // Ground-level railway
@@ -92,6 +116,11 @@ pub fn generate_railways(editor: &mut WorldEditor, element: &ProcessedWay) {
 
                 block_counter += 1;
             }
+        }
+
+        // Add abutments at railway bridge endpoints
+        if let Some((deck_y, ref config)) = bridge_info {
+            bridges::place_bridge_abutments(editor, element, deck_y, config);
         }
     }
 }
