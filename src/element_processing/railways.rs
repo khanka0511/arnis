@@ -1,5 +1,6 @@
 use crate::block_definitions::*;
 use crate::bresenham::bresenham_line;
+use crate::element_processing::bridges;
 use crate::osm_parser::ProcessedWay;
 use crate::world_editor::WorldEditor;
 
@@ -30,6 +31,11 @@ pub fn generate_railways(editor: &mut WorldEditor, element: &ProcessedWay) {
             }
         }
 
+        // Check if this railway is on a bridge
+        let bridge_info = bridges::get_railway_bridge_info(editor, element);
+
+        let mut block_counter: i32 = 0;
+
         for i in 1..element.nodes.len() {
             let prev_node = element.nodes[i - 1].xz();
             let cur_node = element.nodes[i].xz();
@@ -39,8 +45,6 @@ pub fn generate_railways(editor: &mut WorldEditor, element: &ProcessedWay) {
 
             for j in 0..smoothed_points.len() {
                 let (bx, _, bz) = smoothed_points[j];
-
-                editor.set_block(GRAVEL, bx, 0, bz, None, None);
 
                 let prev = if j > 0 {
                     Some(smoothed_points[j - 1])
@@ -59,11 +63,34 @@ pub fn generate_railways(editor: &mut WorldEditor, element: &ProcessedWay) {
                     next.map(|(x, _, z)| (x, z)),
                 );
 
-                editor.set_block(rail_block, bx, 1, bz, None, None);
+                if let Some((deck_y, ref config)) = bridge_info {
+                    // Elevated railway bridge: place deck, rail, and supports
+                    editor.set_block_absolute(GRAVEL, bx, deck_y, bz, None, None);
+                    editor.set_block_absolute(rail_block, bx, deck_y + 1, bz, None, None);
 
-                if bx % 4 == 0 {
-                    editor.set_block(OAK_LOG, bx, 0, bz, None, None);
+                    // Foundation layer
+                    editor.set_block_absolute(config.support_block, bx, deck_y - 1, bz, None, None);
+
+                    // Support pillars at interval
+                    if block_counter % config.support_interval == 0 {
+                        bridges::place_support_pillar(editor, bx, deck_y - 1, bz, config);
+                    }
+
+                    // Ties on the bridge deck
+                    if bx % 4 == 0 {
+                        editor.set_block_absolute(OAK_LOG, bx, deck_y, bz, None, None);
+                    }
+                } else {
+                    // Ground-level railway
+                    editor.set_block(GRAVEL, bx, 0, bz, None, None);
+                    editor.set_block(rail_block, bx, 1, bz, None, None);
+
+                    if bx % 4 == 0 {
+                        editor.set_block(OAK_LOG, bx, 0, bz, None, None);
+                    }
                 }
+
+                block_counter += 1;
             }
         }
     }

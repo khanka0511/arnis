@@ -1115,7 +1115,7 @@
         },
         {
             "key": "bridge",
-            "description": "Used to identify bridge structures (currently in development)."
+            "description": "Generates bridge structures with type-aware rendering (yes, aqueduct, viaduct, boardwalk, covered). Supports railings, support pillars, and elevation-aware placement."
         },
         {
             "key": "tourism",

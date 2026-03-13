@@ -195,7 +195,7 @@ pub fn generate_world_with_options(
                         waterways::generate_waterways(&mut editor, way);
                     }
                 } else if way.tags.contains_key("bridge") {
-                    //bridges::generate_bridges(&mut editor, way, ground_level); // TODO FIX
+                    bridges::generate_bridges(&mut editor, way);
                 } else if way.tags.contains_key("railway") {
                     railways::generate_railways(&mut editor, way);
                 } else if way.tags.contains_key("roller_coaster") {

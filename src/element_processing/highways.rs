@@ -2,6 +2,7 @@ use crate::args::Args;
 use crate::block_definitions::*;
 use crate::bresenham::bresenham_line;
 use crate::coordinate_system::cartesian::XZPoint;
+use crate::element_processing::bridges;
 use crate::floodfill_cache::FloodFillCache;
 use crate::osm_parser::{ProcessedElement, ProcessedWay};
 use crate::world_editor::WorldEditor;
@@ -643,6 +644,45 @@ fn generate_highways_internal(
                                 stripe_length = 0;
                             }
                         }
+                    }
+
+                    // Add railings on bridge segments (valley bridges and elevated overpasses)
+                    if is_bridge && (is_valley_bridge || effective_elevation > 0) {
+                        let seg_dx = (x2 - x1) as f64;
+                        let seg_dz = (z2 - z1) as f64;
+                        let seg_len = (seg_dx * seg_dx + seg_dz * seg_dz).sqrt();
+                        let (dir_x, dir_z) = if seg_len > 0.0 {
+                            (seg_dx / seg_len, seg_dz / seg_len)
+                        } else {
+                            (1.0, 0.0)
+                        };
+
+                        // Use the deck Y from the first point of this segment for railings
+                        let railing_y = if is_valley_bridge {
+                            bridge_deck_y
+                        } else {
+                            // For overpasses, use the midpoint elevation
+                            let mid = calculate_point_elevation(
+                                segment_index,
+                                segment_length / 2,
+                                segment_length,
+                                total_segments,
+                                effective_elevation,
+                                effective_start_slope,
+                                effective_end_slope,
+                                slope_length,
+                            );
+                            editor.get_absolute_y(x1, mid, z1)
+                        };
+
+                        bridges::add_highway_bridge_railings(
+                            editor,
+                            &bresenham_points,
+                            railing_y,
+                            block_range,
+                            dir_x,
+                            dir_z,
+                        );
                     }
 
                     segment_index += 1;
